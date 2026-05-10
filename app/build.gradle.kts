@@ -24,7 +24,9 @@ android {
     }
 
     buildTypes {
+
         release {
+
             isMinifyEnabled = false
 
             proguardFiles(
@@ -37,6 +39,7 @@ android {
     }
 
     compileOptions {
+
         sourceCompatibility =
             JavaVersion.VERSION_17
 
@@ -53,13 +56,17 @@ android {
     }
 
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
+
+        kotlinCompilerExtensionVersion =
+            "1.5.14"
     }
 }
 
 dependencies {
 
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation(
+        "androidx.core:core-ktx:1.13.1"
+    )
 
     implementation(
         "androidx.lifecycle:lifecycle-runtime-ktx:2.8.4"
@@ -75,9 +82,13 @@ dependencies {
         )
     )
 
-    implementation("androidx.compose.ui:ui")
+    implementation(
+        "androidx.compose.ui:ui"
+    )
 
-    implementation("androidx.compose.ui:ui-graphics")
+    implementation(
+        "androidx.compose.ui:ui-graphics"
+    )
 
     implementation(
         "androidx.compose.ui:ui-tooling-preview"
@@ -87,11 +98,16 @@ dependencies {
         "androidx.compose.material3:material3"
     )
 
+    // ICONS
+    implementation(
+        "androidx.compose.material:material-icons-extended"
+    )
+
     debugImplementation(
         "androidx.compose.ui:ui-tooling"
     )
 
-    // ROOM
+    // ROOM DATABASE
     implementation(
         "androidx.room:room-runtime:2.6.1"
     )
@@ -105,5 +121,7 @@ dependencies {
     )
 
     // TEST
-    testImplementation("junit:junit:4.13.2")
+    testImplementation(
+        "junit:junit:4.13.2"
+    )
 }
