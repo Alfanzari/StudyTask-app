@@ -19,19 +19,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.syauqialfanzari0008.studytask.ui.theme.StudyTaskTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val db = TaskDatabase.getDatabase(this)
+        val dao = db.taskDao()
+
         setContent {
             StudyTaskTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    TodoScreen()
+                    TodoScreen(dao = dao)
                 }
             }
         }
@@ -39,17 +46,10 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun TodoScreen() {
+fun TodoScreen(dao: TaskDao) {
     var taskText by remember { mutableStateOf("") }
-    var taskList by remember {
-        mutableStateOf(
-            listOf(
-                Task("Belajar Jetpack Compose"),
-                Task("Mengerjakan Tugas Mobile"),
-                Task("Commit ke GitHub")
-            )
-        )
-    }
+    val taskList by dao.getAllTasks().collectAsStateWithLifecycle(initialValue = emptyList())
+    val scope = rememberCoroutineScope()
 
     Scaffold { innerPadding ->
         Column(
@@ -78,8 +78,11 @@ fun TodoScreen() {
             Button(
                 onClick = {
                     if (taskText.isNotBlank()) {
-                        taskList = taskList + Task(taskText.trim())
+                        val titleToSave = taskText.trim()
                         taskText = ""
+                        scope.launch(Dispatchers.IO) {
+                            dao.insertTask(Task(title = titleToSave))
+                        }
                     }
                 },
                 modifier = Modifier
@@ -109,8 +112,8 @@ fun TodoScreen() {
                             Checkbox(
                                 checked = task.isDone,
                                 onCheckedChange = { checked ->
-                                    taskList = taskList.map {
-                                        if (it.id == task.id) it.copy(isDone = checked) else it
+                                    scope.launch(Dispatchers.IO) {
+                                        dao.updateTask(task.copy(isDone = checked))
                                     }
                                 }
                             )
@@ -135,7 +138,9 @@ fun TodoScreen() {
                             }
                             IconButton(
                                 onClick = {
-                                    taskList = taskList.filter { it.id != task.id }
+                                    scope.launch(Dispatchers.IO) {
+                                        dao.deleteTask(task)
+                                    }
                                 }
                             ) {
                                 Icon(

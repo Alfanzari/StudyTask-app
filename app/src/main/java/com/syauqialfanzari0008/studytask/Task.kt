@@ -1,9 +1,15 @@
 package com.syauqialfanzari0008.studytask
 
-import java.util.UUID
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.PrimaryKey
 
+@Entity(tableName = "tasks")
 data class Task(
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
+    @ColumnInfo(name = "title")
     val title: String,
-    val isDone: Boolean = false,
-    val id: String = UUID.randomUUID().toString()
+    @ColumnInfo(name = "is_done")
+    val isDone: Boolean = false
 )

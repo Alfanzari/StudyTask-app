@@ -72,6 +72,11 @@ dependencies {
         "androidx.lifecycle:lifecycle-runtime-ktx:2.8.4"
     )
 
+    // TAMBAHAN - untuk collectAsStateWithLifecycle
+    implementation(
+        "androidx.lifecycle:lifecycle-runtime-compose:2.8.4"
+    )
+
     implementation(
         "androidx.activity:activity-compose:1.9.1"
     )
