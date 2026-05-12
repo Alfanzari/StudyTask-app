@@ -72,7 +72,6 @@ dependencies {
         "androidx.lifecycle:lifecycle-runtime-ktx:2.8.4"
     )
 
-    // TAMBAHAN - untuk collectAsStateWithLifecycle
     implementation(
         "androidx.lifecycle:lifecycle-runtime-compose:2.8.4"
     )
@@ -128,6 +127,11 @@ dependencies {
     // DATASTORE
     implementation(
         "androidx.datastore:datastore-preferences:1.1.1"
+    )
+
+    // KONFETTI
+    implementation(
+        "nl.dionsegijn:konfetti-compose:2.0.4"
     )
 
     // TEST

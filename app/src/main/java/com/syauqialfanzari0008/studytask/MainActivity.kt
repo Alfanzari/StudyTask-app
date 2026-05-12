@@ -36,6 +36,12 @@ import kotlinx.coroutines.launch
 import com.syauqialfanzari0008.studytask.ui.theme.StudyTaskTheme
 import java.text.SimpleDateFormat
 import java.util.*
+import nl.dionsegijn.konfetti.compose.KonfettiView
+import nl.dionsegijn.konfetti.compose.OnParticleSystemUpdateListener
+import nl.dionsegijn.konfetti.core.Party
+import nl.dionsegijn.konfetti.core.Position
+import nl.dionsegijn.konfetti.core.emitter.Emitter
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -119,6 +125,24 @@ fun DatePickerButton(
     }
 }
 
+fun konfettiParty(): List<Party> {
+    return listOf(
+        Party(
+            emitter = Emitter(duration = 3, TimeUnit.SECONDS).perSecond(80),
+            position = Position.Relative(0.5, 0.0),
+            spread = 360,
+            colors = listOf(
+                0xFF4F46E5.toInt(),
+                0xFF7C3AED.toInt(),
+                0xFF16A34A.toInt(),
+                0xFFF59E0B.toInt(),
+                0xFFEF4444.toInt(),
+                0xFF06B6D4.toInt()
+            )
+        )
+    )
+}
+
 @Composable
 fun TodoScreen(
     dao: TaskDao,
@@ -136,6 +160,18 @@ fun TodoScreen(
     val totalTask = taskList.size
     val doneTask = taskList.count { it.isDone }
     val progress = if (totalTask > 0) doneTask.toFloat() / totalTask.toFloat() else 0f
+
+    // KONFETTI — muncul saat semua task selesai
+    val allDone = totalTask > 0 && doneTask == totalTask
+    var showKonfetti by remember { mutableStateOf(false) }
+    var lastAllDone by remember { mutableStateOf(false) }
+
+    LaunchedEffect(allDone) {
+        if (allDone && !lastAllDone) {
+            showKonfetti = true
+        }
+        lastAllDone = allDone
+    }
 
     var taskToEdit by remember { mutableStateOf<Task?>(null) }
     var editText by remember { mutableStateOf("") }
@@ -368,244 +404,171 @@ fun TodoScreen(
         )
     }
 
-    Scaffold(
-        floatingActionButton = {
-            if (selectedTab == 0) {
-                FloatingActionButton(
-                    onClick = { showAddDialog = true },
-                    containerColor = Color(0xFF4F46E5),
-                    shape = CircleShape
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Tambah", tint = Color.White)
-                }
-            }
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp
-            ) {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.Home, contentDescription = null) },
-                    label = { Text("Home") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Default.CheckCircle, contentDescription = null) },
-                    label = { Text("Selesai") }
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = onToggleDarkMode,
-                    icon = {
-                        Icon(
-                            imageVector = if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
-                            contentDescription = null
-                        )
-                    },
-                    label = { Text(if (isDarkMode) "Light" else "Dark") }
-                )
-            }
-        }
-    ) { innerPadding ->
-
-        when (selectedTab) {
-
-            0 -> {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(innerPadding),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Brush.verticalGradient(colors = listOf(Color(0xFF4F46E5), Color(0xFF7C3AED))))
-                                .padding(horizontal = 24.dp, vertical = 32.dp)
-                        ) {
-                            Column {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text("Hi, $username! 👋", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                        Text("Ayo selesaikan tugasmu", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .size(44.dp).clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.2f))
-                                            .clickable { usernameInput = username; showUsernameDialog = true },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth().clip(RoundedCornerShape(20.dp))
-                                        .background(Color.White.copy(alpha = 0.15f)).padding(16.dp)
-                                ) {
-                                    Column {
-                                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                            Text("Progress Hari Ini", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                            Text("$doneTask / $totalTask task", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
-                                        }
-                                        Spacer(modifier = Modifier.height(10.dp))
-                                        Box(modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.3f))) {
-                                            Box(modifier = Modifier.fillMaxWidth(progress).height(8.dp).clip(RoundedCornerShape(50)).background(Color.White))
-                                        }
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            text = if (totalTask == 0) "Belum ada task"
-                                            else if (doneTask == totalTask) "Semua task selesai! 🎉"
-                                            else "${(progress * 100).toInt()}% selesai",
-                                            color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Daftar Task", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                            Text("$totalTask task", fontSize = 13.sp, color = Color.Gray)
-                        }
-                    }
-
-                    items(taskList, key = { it.id }) { task ->
-                        val cardColor by animateColorAsState(
-                            targetValue = if (task.isDone) Color(0xFFD1FAE5) else MaterialTheme.colorScheme.surface,
-                            animationSpec = tween(durationMillis = 400),
-                            label = "cardColor"
-                        )
-                        AnimatedVisibility(
-                            visible = true,
-                            enter = fadeIn(tween(300)) + slideInVertically(initialOffsetY = { it / 2 }, animationSpec = tween(300))
-                        ) {
-                            Card(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                                shape = RoundedCornerShape(20.dp),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = cardColor)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp).clip(CircleShape)
-                                            .background(if (task.isDone) Color(0xFF16A34A) else Color(0xFF4F46E5).copy(alpha = 0.1f))
-                                            .clickable { scope.launch(Dispatchers.IO) { dao.updateTask(task.copy(isDone = !task.isDone)) } },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            if (task.isDone) Icons.Default.Check else Icons.Default.RadioButtonUnchecked,
-                                            contentDescription = null,
-                                            tint = if (task.isDone) Color.White else Color(0xFF4F46E5),
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(14.dp))
-                                    Column(
-                                        modifier = Modifier.weight(1f).clickable {
-                                            taskToEdit = task
-                                            editText = task.title
-                                            editPriority = task.priority
-                                            editDueDate = task.dueDate
-                                        }
-                                    ) {
-                                        Text(
-                                            task.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                                            color = if (task.isDone) Color(0xFF16A34A) else MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(priorityColor(task.priority).copy(alpha = 0.15f))
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            ) {
-                                                Text(task.priority, fontSize = 10.sp, color = priorityColor(task.priority), fontWeight = FontWeight.Bold)
-                                            }
-                                            if (task.dueDate.isNotEmpty()) {
-                                                Text("📅 ${task.dueDate}", fontSize = 11.sp, color = Color.Gray)
-                                            }
-                                        }
-                                    }
-                                    IconButton(onClick = { scope.launch(Dispatchers.IO) { dao.deleteTask(task) } }) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Hapus", tint = Color(0xFFEF4444))
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    item { Spacer(modifier = Modifier.height(80.dp)) }
-                }
-            }
-
-            1 -> {
-                val doneTasks = taskList.filter { it.isDone }
-                Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Brush.verticalGradient(colors = listOf(Color(0xFF16A34A), Color(0xFF15803D))))
-                            .padding(horizontal = 24.dp, vertical = 32.dp)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            floatingActionButton = {
+                if (selectedTab == 0) {
+                    FloatingActionButton(
+                        onClick = { showAddDialog = true },
+                        containerColor = Color(0xFF4F46E5),
+                        shape = CircleShape
                     ) {
-                        Column {
-                            Text("Task Selesai ✅", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                            Text("${doneTasks.size} task berhasil diselesaikan", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
-                        }
+                        Icon(Icons.Default.Add, contentDescription = "Tambah", tint = Color.White)
                     }
-                    if (doneTasks.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.Gray.copy(alpha = 0.4f), modifier = Modifier.size(80.dp))
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text("Belum ada task selesai", fontSize = 16.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
-                                Text("Selesaikan task di halaman Home", fontSize = 13.sp, color = Color.Gray.copy(alpha = 0.7f))
+                }
+            },
+            bottomBar = {
+                NavigationBar(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 8.dp
+                ) {
+                    NavigationBarItem(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        icon = { Icon(Icons.Default.Home, contentDescription = null) },
+                        label = { Text("Home") }
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        icon = { Icon(Icons.Default.CheckCircle, contentDescription = null) },
+                        label = { Text("Selesai") }
+                    )
+                    NavigationBarItem(
+                        selected = false,
+                        onClick = onToggleDarkMode,
+                        icon = {
+                            Icon(
+                                imageVector = if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                contentDescription = null
+                            )
+                        },
+                        label = { Text(if (isDarkMode) "Light" else "Dark") }
+                    )
+                }
+            }
+        ) { innerPadding ->
+
+            when (selectedTab) {
+
+                0 -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(innerPadding),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Brush.verticalGradient(colors = listOf(Color(0xFF4F46E5), Color(0xFF7C3AED))))
+                                    .padding(horizontal = 24.dp, vertical = 32.dp)
+                            ) {
+                                Column {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text("Hi, $username! 👋", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                            Text("Ayo selesaikan tugasmu", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .size(44.dp).clip(CircleShape)
+                                                .background(Color.White.copy(alpha = 0.2f))
+                                                .clickable { usernameInput = username; showUsernameDialog = true },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                                            .background(Color.White.copy(alpha = 0.15f)).padding(16.dp)
+                                    ) {
+                                        Column {
+                                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("Progress Hari Ini", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                                Text("$doneTask / $totalTask task", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp)
+                                            }
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            Box(modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = 0.3f))) {
+                                                Box(modifier = Modifier.fillMaxWidth(progress).height(8.dp).clip(RoundedCornerShape(50)).background(Color.White))
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                text = if (totalTask == 0) "Belum ada task"
+                                                else if (doneTask == totalTask) "Semua task selesai! 🎉"
+                                                else "${(progress * 100).toInt()}% selesai",
+                                                color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize().padding(top = 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(doneTasks, key = { it.id }) { task ->
+
+                        item {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Daftar Task", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                Text("$totalTask task", fontSize = 13.sp, color = Color.Gray)
+                            }
+                        }
+
+                        items(taskList, key = { it.id }) { task ->
+                            val cardColor by animateColorAsState(
+                                targetValue = if (task.isDone) Color(0xFFD1FAE5) else MaterialTheme.colorScheme.surface,
+                                animationSpec = tween(durationMillis = 400),
+                                label = "cardColor"
+                            )
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = fadeIn(tween(300)) + slideInVertically(initialOffsetY = { it / 2 }, animationSpec = tween(300))
+                            ) {
                                 Card(
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                                     shape = RoundedCornerShape(20.dp),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFD1FAE5))
+                                    colors = CardDefaults.cardColors(containerColor = cardColor)
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Box(
-                                            modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFF16A34A)),
+                                            modifier = Modifier
+                                                .size(40.dp).clip(CircleShape)
+                                                .background(if (task.isDone) Color(0xFF16A34A) else Color(0xFF4F46E5).copy(alpha = 0.1f))
+                                                .clickable { scope.launch(Dispatchers.IO) { dao.updateTask(task.copy(isDone = !task.isDone)) } },
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                            Icon(
+                                                if (task.isDone) Icons.Default.Check else Icons.Default.RadioButtonUnchecked,
+                                                contentDescription = null,
+                                                tint = if (task.isDone) Color.White else Color(0xFF4F46E5),
+                                                modifier = Modifier.size(20.dp)
+                                            )
                                         }
                                         Spacer(modifier = Modifier.width(14.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(task.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF16A34A))
+                                        Column(
+                                            modifier = Modifier.weight(1f).clickable {
+                                                taskToEdit = task
+                                                editText = task.title
+                                                editPriority = task.priority
+                                                editDueDate = task.dueDate
+                                            }
+                                        ) {
+                                            Text(
+                                                task.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                                                color = if (task.isDone) Color(0xFF16A34A) else MaterialTheme.colorScheme.onSurface
+                                            )
                                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                                 Box(
                                                     modifier = Modifier
@@ -616,18 +579,106 @@ fun TodoScreen(
                                                     Text(task.priority, fontSize = 10.sp, color = priorityColor(task.priority), fontWeight = FontWeight.Bold)
                                                 }
                                                 if (task.dueDate.isNotEmpty()) {
-                                                    Text("📅 ${task.dueDate}", fontSize = 11.sp, color = Color(0xFF16A34A).copy(alpha = 0.7f))
+                                                    Text("📅 ${task.dueDate}", fontSize = 11.sp, color = Color.Gray)
+                                                }
+                                            }
+                                        }
+                                        IconButton(onClick = { scope.launch(Dispatchers.IO) { dao.deleteTask(task) } }) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Hapus", tint = Color(0xFFEF4444))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        item { Spacer(modifier = Modifier.height(80.dp)) }
+                    }
+                }
+
+                1 -> {
+                    val doneTasks = taskList.filter { it.isDone }
+                    Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Brush.verticalGradient(colors = listOf(Color(0xFF16A34A), Color(0xFF15803D))))
+                                .padding(horizontal = 24.dp, vertical = 32.dp)
+                        ) {
+                            Column {
+                                Text("Task Selesai ✅", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Text("${doneTasks.size} task berhasil diselesaikan", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
+                            }
+                        }
+                        if (doneTasks.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.Gray.copy(alpha = 0.4f), modifier = Modifier.size(80.dp))
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Belum ada task selesai", fontSize = 16.sp, color = Color.Gray, fontWeight = FontWeight.SemiBold)
+                                    Text("Selesaikan task di halaman Home", fontSize = 13.sp, color = Color.Gray.copy(alpha = 0.7f))
+                                }
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize().padding(top = 16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(doneTasks, key = { it.id }) { task ->
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                                        shape = RoundedCornerShape(20.dp),
+                                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color(0xFFD1FAE5))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFF16A34A)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                            }
+                                            Spacer(modifier = Modifier.width(14.dp))
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(task.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF16A34A))
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(RoundedCornerShape(6.dp))
+                                                            .background(priorityColor(task.priority).copy(alpha = 0.15f))
+                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text(task.priority, fontSize = 10.sp, color = priorityColor(task.priority), fontWeight = FontWeight.Bold)
+                                                    }
+                                                    if (task.dueDate.isNotEmpty()) {
+                                                        Text("📅 ${task.dueDate}", fontSize = 11.sp, color = Color(0xFF16A34A).copy(alpha = 0.7f))
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
+                                item { Spacer(modifier = Modifier.height(80.dp)) }
                             }
-                            item { Spacer(modifier = Modifier.height(80.dp)) }
                         }
                     }
                 }
             }
+        }
+
+        // KONFETTI OVERLAY — di atas semua konten
+        if (showKonfetti) {
+            KonfettiView(
+                modifier = Modifier.fillMaxSize(),
+                parties = konfettiParty(),
+                updateListener = object : OnParticleSystemUpdateListener {
+                    override fun onParticleSystemEnded(system: nl.dionsegijn.konfetti.core.PartySystem, activeSystems: Int) {
+                        if (activeSystems == 0) showKonfetti = false
+                    }
+                }
+            )
         }
     }
 }
