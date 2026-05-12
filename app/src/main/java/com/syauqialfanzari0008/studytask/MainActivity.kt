@@ -52,7 +52,12 @@ class MainActivity : ComponentActivity() {
         val dao = db.taskDao()
 
         setContent {
-            var isDarkMode by remember { mutableStateOf(false) }
+            val context = applicationContext
+            val userPrefs = remember { UserPreferences(context) }
+
+            // Dark mode dibaca dari DataStore — tersimpan permanen
+            val isDarkMode by userPrefs.darkMode.collectAsStateWithLifecycle(initialValue = false)
+            val scope = rememberCoroutineScope()
 
             StudyTaskTheme(darkTheme = isDarkMode) {
                 Surface(
@@ -62,7 +67,9 @@ class MainActivity : ComponentActivity() {
                     TodoScreen(
                         dao = dao,
                         isDarkMode = isDarkMode,
-                        onToggleDarkMode = { isDarkMode = !isDarkMode }
+                        onToggleDarkMode = {
+                            scope.launch { userPrefs.saveDarkMode(!isDarkMode) }
+                        }
                     )
                 }
             }
@@ -143,7 +150,6 @@ fun konfettiParty(): List<Party> {
     )
 }
 
-// ===== SWIPE TO DELETE BACKGROUND =====
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SwipeDeleteBackground(dismissDirection: SwipeToDismissBoxValue) {
@@ -167,6 +173,153 @@ fun SwipeDeleteBackground(dismissDirection: SwipeToDismissBoxValue) {
                 contentDescription = "Hapus",
                 tint = Color.White,
                 modifier = Modifier.padding(end = 24.dp)
+            )
+        }
+    }
+}
+
+// ===== HALAMAN STATISTIK =====
+@Composable
+fun StatistikScreen(taskList: List<Task>, innerPadding: PaddingValues) {
+    val totalTask = taskList.size
+    val doneTask = taskList.count { it.isDone }
+    val pendingTask = totalTask - doneTask
+    val highTask = taskList.count { it.priority == "High" }
+    val mediumTask = taskList.count { it.priority == "Medium" }
+    val lowTask = taskList.count { it.priority == "Low" }
+    val progress = if (totalTask > 0) doneTask.toFloat() / totalTask.toFloat() else 0f
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(innerPadding),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Brush.verticalGradient(colors = listOf(Color(0xFF7C3AED), Color(0xFF4F46E5))))
+                    .padding(horizontal = 24.dp, vertical = 32.dp)
+            ) {
+                Column {
+                    Text("Statistik 📊", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Ringkasan semua task kamu", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
+                }
+            }
+        }
+
+        item {
+            // KARTU PROGRESS BESAR
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text("Progress Keseluruhan", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Box(
+                        modifier = Modifier.fillMaxWidth().height(12.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(progress).height(12.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        colors = listOf(Color(0xFF4F46E5), Color(0xFF7C3AED))
+                                    )
+                                )
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${(progress * 100).toInt()}% selesai",
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+        }
+
+        item {
+            // 3 KARTU ANGKA
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                StatCard(modifier = Modifier.weight(1f), label = "Total", value = totalTask.toString(), color = Color(0xFF4F46E5))
+                StatCard(modifier = Modifier.weight(1f), label = "Selesai", value = doneTask.toString(), color = Color(0xFF16A34A))
+                StatCard(modifier = Modifier.weight(1f), label = "Pending", value = pendingTask.toString(), color = Color(0xFFF59E0B))
+            }
+        }
+
+        item {
+            // PRIORITAS
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Berdasarkan Prioritas", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    PriorityStatRow("High", highTask, totalTask, Color(0xFFEF4444))
+                    PriorityStatRow("Medium", mediumTask, totalTask, Color(0xFFF59E0B))
+                    PriorityStatRow("Low", lowTask, totalTask, Color(0xFF22C55E))
+                }
+            }
+        }
+
+        item { Spacer(modifier = Modifier.height(80.dp)) }
+    }
+}
+
+@Composable
+fun StatCard(modifier: Modifier = Modifier, label: String, value: String, color: Color) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(value, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = color)
+            Text(label, fontSize = 12.sp, color = color.copy(alpha = 0.8f), fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+@Composable
+fun PriorityStatRow(label: String, count: Int, total: Int, color: Color) {
+    val fraction = if (total > 0) count.toFloat() / total.toFloat() else 0f
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(color)
+                )
+                Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+            Text("$count task", fontSize = 13.sp, color = Color.Gray)
+        }
+        Box(
+            modifier = Modifier.fillMaxWidth().height(6.dp)
+                .clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxWidth(fraction).height(6.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(color)
             )
         }
     }
@@ -196,9 +349,7 @@ fun TodoScreen(
     var lastAllDone by remember { mutableStateOf(false) }
 
     LaunchedEffect(allDone) {
-        if (allDone && !lastAllDone) {
-            showKonfetti = true
-        }
+        if (allDone && !lastAllDone) showKonfetti = true
         lastAllDone = allDone
     }
 
@@ -218,24 +369,13 @@ fun TodoScreen(
     // LAYAR SETUP NAMA
     if (username.isEmpty()) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color(0xFF4F46E5), Color(0xFF7C3AED))
-                    )
-                ),
+            modifier = Modifier.fillMaxSize()
+                .background(Brush.verticalGradient(colors = listOf(Color(0xFF4F46E5), Color(0xFF7C3AED)))),
             contentAlignment = Alignment.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(32.dp)
-            ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
                 Box(
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.2f)),
+                    modifier = Modifier.size(80.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.2f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(44.dp))
@@ -260,11 +400,7 @@ fun TodoScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
-                    onClick = {
-                        if (usernameInput.isNotBlank()) {
-                            scope.launch { userPrefs.saveUsername(usernameInput.trim()) }
-                        }
-                    },
+                    onClick = { if (usernameInput.isNotBlank()) scope.launch { userPrefs.saveUsername(usernameInput.trim()) } },
                     modifier = Modifier.fillMaxWidth().height(55.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color.White)
@@ -303,9 +439,7 @@ fun TodoScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5))
                 ) { Text("Simpan") }
             },
-            dismissButton = {
-                TextButton(onClick = { showUsernameDialog = false }) { Text("Batal") }
-            }
+            dismissButton = { TextButton(onClick = { showUsernameDialog = false }) { Text("Batal") } }
         )
     }
 
@@ -324,10 +458,7 @@ fun TodoScreen(
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
-                    DatePickerButton(
-                        selectedDate = editDueDate,
-                        onDateSelected = { editDueDate = it }
-                    )
+                    DatePickerButton(selectedDate = editDueDate, onDateSelected = { editDueDate = it })
                     Text("Prioritas:", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("High", "Medium", "Low").forEach { p ->
@@ -348,11 +479,7 @@ fun TodoScreen(
                 Button(
                     onClick = {
                         if (editText.isNotBlank()) {
-                            val updated = taskToEdit!!.copy(
-                                title = editText.trim(),
-                                priority = editPriority,
-                                dueDate = editDueDate
-                            )
+                            val updated = taskToEdit!!.copy(title = editText.trim(), priority = editPriority, dueDate = editDueDate)
                             scope.launch(Dispatchers.IO) { dao.updateTask(updated) }
                             taskToEdit = null
                         }
@@ -361,9 +488,7 @@ fun TodoScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5))
                 ) { Text("Simpan") }
             },
-            dismissButton = {
-                TextButton(onClick = { taskToEdit = null }) { Text("Batal") }
-            }
+            dismissButton = { TextButton(onClick = { taskToEdit = null }) { Text("Batal") } }
         )
     }
 
@@ -382,10 +507,7 @@ fun TodoScreen(
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
-                    DatePickerButton(
-                        selectedDate = newDueDate,
-                        onDateSelected = { newDueDate = it }
-                    )
+                    DatePickerButton(selectedDate = newDueDate, onDateSelected = { newDueDate = it })
                     Text("Prioritas:", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("High", "Medium", "Low").forEach { p ->
@@ -409,9 +531,7 @@ fun TodoScreen(
                             val titleToSave = taskText.trim()
                             val dueDateToSave = newDueDate
                             val priorityToSave = newPriority
-                            taskText = ""
-                            newDueDate = ""
-                            newPriority = "Medium"
+                            taskText = ""; newDueDate = ""; newPriority = "Medium"
                             scope.launch(Dispatchers.IO) {
                                 dao.insertTask(Task(title = titleToSave, priority = priorityToSave, dueDate = dueDateToSave))
                             }
@@ -423,12 +543,7 @@ fun TodoScreen(
                 ) { Text("Tambah") }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    showAddDialog = false
-                    taskText = ""
-                    newDueDate = ""
-                    newPriority = "Medium"
-                }) { Text("Batal") }
+                TextButton(onClick = { showAddDialog = false; taskText = ""; newDueDate = ""; newPriority = "Medium" }) { Text("Batal") }
             }
         )
     }
@@ -447,10 +562,7 @@ fun TodoScreen(
                 }
             },
             bottomBar = {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 8.dp
-                ) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 8.dp) {
                     NavigationBarItem(
                         selected = selectedTab == 0,
                         onClick = { selectedTab = 0 },
@@ -462,6 +574,13 @@ fun TodoScreen(
                         onClick = { selectedTab = 1 },
                         icon = { Icon(Icons.Default.CheckCircle, contentDescription = null) },
                         label = { Text("Selesai") }
+                    )
+                    // TAB STATISTIK BARU
+                    NavigationBarItem(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        icon = { Icon(Icons.Default.BarChart, contentDescription = null) },
+                        label = { Text("Statistik") }
                     )
                     NavigationBarItem(
                         selected = false,
@@ -487,8 +606,7 @@ fun TodoScreen(
                     ) {
                         item {
                             Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth()
                                     .background(Brush.verticalGradient(colors = listOf(Color(0xFF4F46E5), Color(0xFF7C3AED))))
                                     .padding(horizontal = 24.dp, vertical = 32.dp)
                             ) {
@@ -503,8 +621,7 @@ fun TodoScreen(
                                             Text("Ayo selesaikan tugasmu", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
                                         }
                                         Box(
-                                            modifier = Modifier
-                                                .size(44.dp).clip(CircleShape)
+                                            modifier = Modifier.size(44.dp).clip(CircleShape)
                                                 .background(Color.White.copy(alpha = 0.2f))
                                                 .clickable { usernameInput = username; showUsernameDialog = true },
                                             contentAlignment = Alignment.Center
@@ -514,8 +631,7 @@ fun TodoScreen(
                                     }
                                     Spacer(modifier = Modifier.height(24.dp))
                                     Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
                                             .background(Color.White.copy(alpha = 0.15f)).padding(16.dp)
                                     ) {
                                         Column {
@@ -551,7 +667,6 @@ fun TodoScreen(
                             }
                         }
 
-                        // ===== SWIPE TO DELETE DI SINI =====
                         items(taskList, key = { it.id }) { task ->
                             val dismissState = rememberSwipeToDismissBoxState(
                                 confirmValueChange = { value ->
@@ -562,13 +677,11 @@ fun TodoScreen(
                                 },
                                 positionalThreshold = { it * 0.4f }
                             )
-
                             val cardColor by animateColorAsState(
                                 targetValue = if (task.isDone) Color(0xFFD1FAE5) else MaterialTheme.colorScheme.surface,
                                 animationSpec = tween(durationMillis = 400),
                                 label = "cardColor"
                             )
-
                             AnimatedVisibility(
                                 visible = true,
                                 enter = fadeIn(tween(300)) + slideInVertically(initialOffsetY = { it / 2 }, animationSpec = tween(300))
@@ -577,9 +690,7 @@ fun TodoScreen(
                                     state = dismissState,
                                     enableDismissFromStartToEnd = false,
                                     enableDismissFromEndToStart = true,
-                                    backgroundContent = {
-                                        SwipeDeleteBackground(dismissState.dismissDirection)
-                                    }
+                                    backgroundContent = { SwipeDeleteBackground(dismissState.dismissDirection) }
                                 ) {
                                     Card(
                                         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
@@ -592,8 +703,7 @@ fun TodoScreen(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Box(
-                                                modifier = Modifier
-                                                    .size(40.dp).clip(CircleShape)
+                                                modifier = Modifier.size(40.dp).clip(CircleShape)
                                                     .background(if (task.isDone) Color(0xFF16A34A) else Color(0xFF4F46E5).copy(alpha = 0.1f))
                                                     .clickable { scope.launch(Dispatchers.IO) { dao.updateTask(task.copy(isDone = !task.isDone)) } },
                                                 contentAlignment = Alignment.Center
@@ -608,10 +718,8 @@ fun TodoScreen(
                                             Spacer(modifier = Modifier.width(14.dp))
                                             Column(
                                                 modifier = Modifier.weight(1f).clickable {
-                                                    taskToEdit = task
-                                                    editText = task.title
-                                                    editPriority = task.priority
-                                                    editDueDate = task.dueDate
+                                                    taskToEdit = task; editText = task.title
+                                                    editPriority = task.priority; editDueDate = task.dueDate
                                                 }
                                             ) {
                                                 Text(
@@ -620,8 +728,7 @@ fun TodoScreen(
                                                 )
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                                     Box(
-                                                        modifier = Modifier
-                                                            .clip(RoundedCornerShape(6.dp))
+                                                        modifier = Modifier.clip(RoundedCornerShape(6.dp))
                                                             .background(priorityColor(task.priority).copy(alpha = 0.15f))
                                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                                     ) {
@@ -649,8 +756,7 @@ fun TodoScreen(
                     val doneTasks = taskList.filter { it.isDone }
                     Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                         Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth()
                                 .background(Brush.verticalGradient(colors = listOf(Color(0xFF16A34A), Color(0xFF15803D))))
                                 .padding(horizontal = 24.dp, vertical = 32.dp)
                         ) {
@@ -695,8 +801,7 @@ fun TodoScreen(
                                                 Text(task.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF16A34A))
                                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                                     Box(
-                                                        modifier = Modifier
-                                                            .clip(RoundedCornerShape(6.dp))
+                                                        modifier = Modifier.clip(RoundedCornerShape(6.dp))
                                                             .background(priorityColor(task.priority).copy(alpha = 0.15f))
                                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                                     ) {
@@ -715,6 +820,9 @@ fun TodoScreen(
                         }
                     }
                 }
+
+                // TAB STATISTIK
+                2 -> StatistikScreen(taskList = taskList, innerPadding = innerPadding)
             }
         }
 
