@@ -19,5 +19,7 @@ data class Task(
     @ColumnInfo(name = "category")
     val category: String = "Umum",
     @ColumnInfo(name = "completed_date")
-    val completedDate: String = ""
+    val completedDate: String = "",
+    @ColumnInfo(name = "pomodoro_count")
+    val pomodoroCount: Int = 0
 )
