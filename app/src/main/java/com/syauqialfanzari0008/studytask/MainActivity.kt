@@ -143,6 +143,36 @@ fun konfettiParty(): List<Party> {
     )
 }
 
+// ===== SWIPE TO DELETE BACKGROUND =====
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SwipeDeleteBackground(dismissDirection: SwipeToDismissBoxValue) {
+    val color by animateColorAsState(
+        targetValue = if (dismissDirection == SwipeToDismissBoxValue.EndToStart)
+            Color(0xFFEF4444) else Color.Transparent,
+        animationSpec = tween(300),
+        label = "swipeBg"
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(color),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        if (dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = "Hapus",
+                tint = Color.White,
+                modifier = Modifier.padding(end = 24.dp)
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodoScreen(
     dao: TaskDao,
@@ -161,7 +191,6 @@ fun TodoScreen(
     val doneTask = taskList.count { it.isDone }
     val progress = if (totalTask > 0) doneTask.toFloat() / totalTask.toFloat() else 0f
 
-    // KONFETTI — muncul saat semua task selesai
     val allDone = totalTask > 0 && doneTask == totalTask
     var showKonfetti by remember { mutableStateOf(false) }
     var lastAllDone by remember { mutableStateOf(false) }
@@ -522,69 +551,90 @@ fun TodoScreen(
                             }
                         }
 
+                        // ===== SWIPE TO DELETE DI SINI =====
                         items(taskList, key = { it.id }) { task ->
+                            val dismissState = rememberSwipeToDismissBoxState(
+                                confirmValueChange = { value ->
+                                    if (value == SwipeToDismissBoxValue.EndToStart) {
+                                        scope.launch(Dispatchers.IO) { dao.deleteTask(task) }
+                                        true
+                                    } else false
+                                },
+                                positionalThreshold = { it * 0.4f }
+                            )
+
                             val cardColor by animateColorAsState(
                                 targetValue = if (task.isDone) Color(0xFFD1FAE5) else MaterialTheme.colorScheme.surface,
                                 animationSpec = tween(durationMillis = 400),
                                 label = "cardColor"
                             )
+
                             AnimatedVisibility(
                                 visible = true,
                                 enter = fadeIn(tween(300)) + slideInVertically(initialOffsetY = { it / 2 }, animationSpec = tween(300))
                             ) {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                                    shape = RoundedCornerShape(20.dp),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                                    colors = CardDefaults.cardColors(containerColor = cardColor)
+                                SwipeToDismissBox(
+                                    state = dismissState,
+                                    enableDismissFromStartToEnd = false,
+                                    enableDismissFromEndToStart = true,
+                                    backgroundContent = {
+                                        SwipeDeleteBackground(dismissState.dismissDirection)
+                                    }
                                 ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                        verticalAlignment = Alignment.CenterVertically
+                                    Card(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                                        shape = RoundedCornerShape(20.dp),
+                                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                                        colors = CardDefaults.cardColors(containerColor = cardColor)
                                     ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(40.dp).clip(CircleShape)
-                                                .background(if (task.isDone) Color(0xFF16A34A) else Color(0xFF4F46E5).copy(alpha = 0.1f))
-                                                .clickable { scope.launch(Dispatchers.IO) { dao.updateTask(task.copy(isDone = !task.isDone)) } },
-                                            contentAlignment = Alignment.Center
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(
-                                                if (task.isDone) Icons.Default.Check else Icons.Default.RadioButtonUnchecked,
-                                                contentDescription = null,
-                                                tint = if (task.isDone) Color.White else Color(0xFF4F46E5),
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(14.dp))
-                                        Column(
-                                            modifier = Modifier.weight(1f).clickable {
-                                                taskToEdit = task
-                                                editText = task.title
-                                                editPriority = task.priority
-                                                editDueDate = task.dueDate
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(40.dp).clip(CircleShape)
+                                                    .background(if (task.isDone) Color(0xFF16A34A) else Color(0xFF4F46E5).copy(alpha = 0.1f))
+                                                    .clickable { scope.launch(Dispatchers.IO) { dao.updateTask(task.copy(isDone = !task.isDone)) } },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    if (task.isDone) Icons.Default.Check else Icons.Default.RadioButtonUnchecked,
+                                                    contentDescription = null,
+                                                    tint = if (task.isDone) Color.White else Color(0xFF4F46E5),
+                                                    modifier = Modifier.size(20.dp)
+                                                )
                                             }
-                                        ) {
-                                            Text(
-                                                task.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                                                color = if (task.isDone) Color(0xFF16A34A) else MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(6.dp))
-                                                        .background(priorityColor(task.priority).copy(alpha = 0.15f))
-                                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                                ) {
-                                                    Text(task.priority, fontSize = 10.sp, color = priorityColor(task.priority), fontWeight = FontWeight.Bold)
+                                            Spacer(modifier = Modifier.width(14.dp))
+                                            Column(
+                                                modifier = Modifier.weight(1f).clickable {
+                                                    taskToEdit = task
+                                                    editText = task.title
+                                                    editPriority = task.priority
+                                                    editDueDate = task.dueDate
                                                 }
-                                                if (task.dueDate.isNotEmpty()) {
-                                                    Text("📅 ${task.dueDate}", fontSize = 11.sp, color = Color.Gray)
+                                            ) {
+                                                Text(
+                                                    task.title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                                                    color = if (task.isDone) Color(0xFF16A34A) else MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .clip(RoundedCornerShape(6.dp))
+                                                            .background(priorityColor(task.priority).copy(alpha = 0.15f))
+                                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text(task.priority, fontSize = 10.sp, color = priorityColor(task.priority), fontWeight = FontWeight.Bold)
+                                                    }
+                                                    if (task.dueDate.isNotEmpty()) {
+                                                        Text("📅 ${task.dueDate}", fontSize = 11.sp, color = Color.Gray)
+                                                    }
                                                 }
                                             }
-                                        }
-                                        IconButton(onClick = { scope.launch(Dispatchers.IO) { dao.deleteTask(task) } }) {
-                                            Icon(Icons.Default.Delete, contentDescription = "Hapus", tint = Color(0xFFEF4444))
+                                            IconButton(onClick = { scope.launch(Dispatchers.IO) { dao.deleteTask(task) } }) {
+                                                Icon(Icons.Default.Delete, contentDescription = "Hapus", tint = Color(0xFFEF4444))
+                                            }
                                         }
                                     }
                                 }
@@ -668,7 +718,7 @@ fun TodoScreen(
             }
         }
 
-        // KONFETTI OVERLAY — di atas semua konten
+        // KONFETTI OVERLAY
         if (showKonfetti) {
             KonfettiView(
                 modifier = Modifier.fillMaxSize(),
