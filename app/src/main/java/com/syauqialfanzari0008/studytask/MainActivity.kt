@@ -4,6 +4,11 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -124,63 +129,80 @@ fun TodoScreen(
 
             LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(taskList, key = { it.id }) { task ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(20.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+
+                    val cardColor by animateColorAsState(
+                        targetValue = if (task.isDone)
+                            Color(0xFFD1FAE5)
+                        else
+                            MaterialTheme.colorScheme.surface,
+                        animationSpec = tween(durationMillis = 400),
+                        label = "cardColor"
+                    )
+
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(tween(300)) + slideInVertically(
+                            initialOffsetY = { it / 2 },
+                            animationSpec = tween(300)
+                        )
                     ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(18.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                            colors = CardDefaults.cardColors(containerColor = cardColor)
                         ) {
-                            Checkbox(
-                                checked = task.isDone,
-                                onCheckedChange = { checked ->
-                                    scope.launch(Dispatchers.IO) {
-                                        dao.updateTask(task.copy(isDone = checked))
-                                    }
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = task.title,
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = if (task.isDone) "Selesai" else "Belum selesai",
-                                    color = if (task.isDone) Color(0xFF16A34A) else Color.Gray
-                                )
-                            }
-                            if (task.isDone) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = null,
-                                    tint = Color(0xFF16A34A)
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    scope.launch(Dispatchers.IO) {
-                                        dao.deleteTask(task)
-                                    }
-                                }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(18.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Hapus",
-                                    tint = Color(0xFFEF4444)
+                                Checkbox(
+                                    checked = task.isDone,
+                                    onCheckedChange = { checked ->
+                                        scope.launch(Dispatchers.IO) {
+                                            dao.updateTask(task.copy(isDone = checked))
+                                        }
+                                    }
                                 )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = task.title,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = if (task.isDone) "Selesai" else "Belum selesai",
+                                        color = if (task.isDone) Color(0xFF16A34A) else Color.Gray
+                                    )
+                                }
+                                if (task.isDone) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = Color(0xFF16A34A)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        scope.launch(Dispatchers.IO) {
+                                            dao.deleteTask(task)
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Hapus",
+                                        tint = Color(0xFFEF4444)
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
-
-
         }
     }
 }
