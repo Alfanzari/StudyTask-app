@@ -17,5 +17,7 @@ data class Task(
     @ColumnInfo(name = "due_date")
     val dueDate: String = "",
     @ColumnInfo(name = "category")
-    val category: String = "Umum"
+    val category: String = "Umum",
+    @ColumnInfo(name = "completed_date")
+    val completedDate: String = ""
 )

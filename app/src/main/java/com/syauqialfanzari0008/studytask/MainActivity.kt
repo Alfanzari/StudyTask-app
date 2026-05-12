@@ -1,6 +1,11 @@
 package com.syauqialfanzari0008.studytask
 
+import android.content.ContentValues
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -56,6 +61,64 @@ import java.util.concurrent.TimeUnit
 
 val CATEGORIES = listOf("Umum", "Kuliah", "Kerja", "Personal", "Belanja", "Kesehatan")
 
+// Helper: format millis ke "dd MMM yyyy"
+fun formatDateMillis(millis: Long): String {
+    val sdf = SimpleDateFormat("dd MMM yyyy", Locale("id", "ID"))
+    return sdf.format(Date(millis))
+}
+
+// Helper: today as "yyyy-MM-dd"
+fun todayString(): String {
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    return sdf.format(Date())
+}
+
+// Helper: get date string for N days ago as "yyyy-MM-dd"
+fun daysAgoString(daysAgo: Int): String {
+    val cal = Calendar.getInstance()
+    cal.add(Calendar.DAY_OF_YEAR, -daysAgo)
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    return sdf.format(cal.time)
+}
+
+// Helper: short label "Sen", "Sel", etc. from "yyyy-MM-dd"
+fun shortDayLabel(dateStr: String): String {
+    return try {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale("id", "ID"))
+        val cal = Calendar.getInstance()
+        cal.time = sdf.parse(dateStr) ?: return dateStr
+        val dayNames = listOf("Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab")
+        dayNames[cal.get(Calendar.DAY_OF_WEEK) - 1]
+    } catch (e: Exception) { dateStr }
+}
+
+// Hitung streak: berapa hari berturut-turut (mundur dari hari ini) ada task selesai
+fun calculateStreak(taskList: List<Task>): Int {
+    val completedDates = taskList.filter { it.isDone && it.completedDate.isNotEmpty() }
+        .map { it.completedDate }
+        .toSet()
+    if (completedDates.isEmpty()) return 0
+    var streak = 0
+    var checkDay = 0
+    while (true) {
+        val dayStr = daysAgoString(checkDay)
+        if (completedDates.contains(dayStr)) {
+            streak++
+            checkDay++
+        } else break
+    }
+    return streak
+}
+
+// Weekly data: count completed tasks per day for last 7 days
+fun weeklyCompletedData(taskList: List<Task>): List<Pair<String, Int>> {
+    return (6 downTo 0).map { daysAgo ->
+        val dayStr = daysAgoString(daysAgo)
+        val count = taskList.count { it.isDone && it.completedDate == dayStr }
+        shortDayLabel(dayStr) to count
+    }
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -103,11 +166,6 @@ fun categoryColor(category: String): Color {
         "Kesehatan" -> Color(0xFF16A34A)
         else -> Color(0xFF6B7280)
     }
-}
-
-fun formatDateMillis(millis: Long): String {
-    val sdf = SimpleDateFormat("dd MMM yyyy", Locale("id", "ID"))
-    return sdf.format(Date(millis))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -298,7 +356,6 @@ fun DonutChart(
             val topLeft = Offset(strokePx / 2, strokePx / 2)
             val arcSize = Size(diameter, diameter)
 
-            // Track (background ring)
             drawArc(
                 color = Color(0xFFE5E7EB),
                 startAngle = -90f,
@@ -309,7 +366,6 @@ fun DonutChart(
                 style = Stroke(width = strokePx, cap = StrokeCap.Round)
             )
 
-            // Progress arc
             if (animatedProgress.value > 0f) {
                 drawArc(
                     brush = Brush.sweepGradient(
@@ -417,9 +473,133 @@ fun AnimatedStatRow(label: String, count: Int, total: Int, color: Color) {
     }
 }
 
+// ===== WEEKLY BAR CHART =====
+@Composable
+fun WeeklyBarChart(data: List<Pair<String, Int>>) {
+    val maxVal = data.maxOfOrNull { it.second }?.coerceAtLeast(1) ?: 1
+    val barColor = Color(0xFF4F46E5)
+    val today = shortDayLabel(daysAgoString(0))
+
+    Row(
+        modifier = Modifier.fillMaxWidth().height(120.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.Bottom
+    ) {
+        data.forEach { (day, count) ->
+            val fraction = count.toFloat() / maxVal.toFloat()
+            val animFraction = remember { Animatable(0f) }
+            LaunchedEffect(fraction) {
+                animFraction.animateTo(fraction, animationSpec = tween(700, easing = FastOutSlowInEasing))
+            }
+            val isToday = day == today
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Bottom,
+                modifier = Modifier.weight(1f)
+            ) {
+                // count label di atas bar
+                Text(
+                    text = if (count > 0) "$count" else "",
+                    fontSize = 10.sp,
+                    color = if (isToday) Color(0xFF4F46E5) else Color.Gray,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.55f)
+                        .height((80 * animFraction.value).coerceAtLeast(4f).dp)
+                        .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                        .background(
+                            if (isToday)
+                                Brush.verticalGradient(listOf(Color(0xFF7C3AED), Color(0xFF4F46E5)))
+                            else
+                                Brush.verticalGradient(listOf(barColor.copy(alpha = 0.5f), barColor.copy(alpha = 0.25f)))
+                        )
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = day,
+                    fontSize = 11.sp,
+                    color = if (isToday) Color(0xFF4F46E5) else Color.Gray,
+                    fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
+                )
+            }
+        }
+    }
+}
+
+// ===== STREAK BADGE =====
+@Composable
+fun StreakBadge(streak: Int) {
+    val color = when {
+        streak >= 7 -> Color(0xFFEF4444)
+        streak >= 3 -> Color(0xFFF59E0B)
+        streak > 0 -> Color(0xFF4F46E5)
+        else -> Color.Gray
+    }
+    val emoji = when {
+        streak >= 7 -> "🔥"
+        streak >= 3 -> "⚡"
+        streak > 0 -> "✨"
+        else -> "💤"
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(color.copy(alpha = 0.15f))
+            .padding(horizontal = 10.dp, vertical = 5.dp)
+    ) {
+        Text(emoji, fontSize = 14.sp)
+        Text(
+            text = "$streak hari",
+            fontSize = 13.sp,
+            color = color,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+// ===== EXPORT CSV =====
+fun exportTasksToCSV(context: android.content.Context, taskList: List<Task>) {
+    try {
+        val sb = StringBuilder()
+        sb.appendLine("No,Judul,Kategori,Prioritas,Due Date,Status,Tanggal Selesai")
+        taskList.forEachIndexed { index, task ->
+            val status = if (task.isDone) "Selesai" else "Pending"
+            sb.appendLine("${index + 1},\"${task.title}\",${task.category},${task.priority},${task.dueDate},$status,${task.completedDate}")
+        }
+
+        val fileName = "StudyTask_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())}.csv"
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                put(MediaStore.Downloads.MIME_TYPE, "text/csv")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+            val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            uri?.let {
+                context.contentResolver.openOutputStream(it)?.use { os ->
+                    os.write(sb.toString().toByteArray())
+                }
+            }
+        } else {
+            val file = java.io.File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), fileName)
+            file.writeText(sb.toString())
+        }
+        Toast.makeText(context, "✅ Tersimpan di Downloads/$fileName", Toast.LENGTH_LONG).show()
+    } catch (e: Exception) {
+        Toast.makeText(context, "Gagal export: ${e.message}", Toast.LENGTH_SHORT).show()
+    }
+}
+
 // ===== STATISTIK SCREEN PREMIUM =====
 @Composable
 fun StatistikScreen(taskList: List<Task>, innerPadding: PaddingValues) {
+    val context = LocalContext.current
     val totalTask = taskList.size
     val doneTask = taskList.count { it.isDone }
     val pendingTask = totalTask - doneTask
@@ -427,6 +607,8 @@ fun StatistikScreen(taskList: List<Task>, innerPadding: PaddingValues) {
     val mediumTask = taskList.count { it.priority == "Medium" }
     val lowTask = taskList.count { it.priority == "Low" }
     val progress = if (totalTask > 0) doneTask.toFloat() / totalTask.toFloat() else 0f
+    val streak = calculateStreak(taskList)
+    val weeklyData = weeklyCompletedData(taskList)
 
     val motivasi = when {
         totalTask == 0 -> "Belum ada task. Yuk mulai! 🚀"
@@ -441,15 +623,25 @@ fun StatistikScreen(taskList: List<Task>, innerPadding: PaddingValues) {
         modifier = Modifier.fillMaxSize().padding(innerPadding),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // HEADER
         item {
             Box(
                 modifier = Modifier.fillMaxWidth()
                     .background(Brush.verticalGradient(colors = listOf(Color(0xFF7C3AED), Color(0xFF4F46E5))))
                     .padding(horizontal = 24.dp, vertical = 28.dp)
             ) {
-                Column {
-                    Text("Statistik 📊", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    Text("Ringkasan semua task kamu", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column {
+                            Text("Statistik 📊", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text("Ringkasan semua task kamu", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
+                        }
+                        // STREAK di header
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Streak", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
+                            StreakBadge(streak = streak)
+                        }
+                    }
                 }
             }
         }
@@ -491,6 +683,93 @@ fun StatistikScreen(taskList: List<Task>, innerPadding: PaddingValues) {
             }
         }
 
+        // GRAFIK MINGGUAN
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(6.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(
+                                modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF4F46E5).copy(alpha = 0.12f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.BarChart, null, tint = Color(0xFF4F46E5), modifier = Modifier.size(18.dp))
+                            }
+                            Text("Aktivitas 7 Hari Terakhir", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+                        // Total selesai minggu ini
+                        val weekTotal = weeklyData.sumOf { it.second }
+                        Box(
+                            modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFF4F46E5).copy(alpha = 0.1f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("$weekTotal task", fontSize = 12.sp, color = Color(0xFF4F46E5), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    WeeklyBarChart(data = weeklyData)
+                }
+            }
+        }
+
+        // STREAK CARD
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(6.dp)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(Color(0xFF7C3AED).copy(alpha = 0.08f), Color(0xFF4F46E5).copy(alpha = 0.04f))
+                            )
+                        )
+                        .padding(20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("🔥 Streak Harian", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(
+                                text = when {
+                                    streak == 0 -> "Selesaikan task hari ini untuk mulai streak!"
+                                    streak == 1 -> "Bagus! Pertahankan streak-mu!"
+                                    streak < 7 -> "Keren! $streak hari berturut-turut!"
+                                    else -> "Luar biasa! $streak hari streak! 🏆"
+                                },
+                                fontSize = 13.sp,
+                                color = Color.Gray
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = "$streak",
+                                fontSize = 40.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = when {
+                                    streak >= 7 -> Color(0xFFEF4444)
+                                    streak >= 3 -> Color(0xFFF59E0B)
+                                    streak > 0 -> Color(0xFF4F46E5)
+                                    else -> Color.Gray.copy(alpha = 0.4f)
+                                }
+                            )
+                            Text("hari", fontSize = 12.sp, color = Color.Gray)
+                        }
+                    }
+                }
+            }
+        }
+
         // PRIORITAS
         item {
             Card(
@@ -516,7 +795,7 @@ fun StatistikScreen(taskList: List<Task>, innerPadding: PaddingValues) {
             }
         }
 
-        // KATEGORI (hanya tampil kalau ada)
+        // KATEGORI
         item {
             val usedCategories = CATEGORIES.filter { cat -> taskList.any { it.category == cat } }
             if (usedCategories.isNotEmpty()) {
@@ -545,6 +824,45 @@ fun StatistikScreen(taskList: List<Task>, innerPadding: PaddingValues) {
             }
         }
 
+        // EXPORT CSV
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(6.dp)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(Brush.horizontalGradient(
+                            colors = listOf(Color(0xFF16A34A).copy(alpha = 0.08f), Color(0xFF16A34A).copy(alpha = 0.03f))
+                        ))
+                        .padding(20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
+                            Text("📤 Export Data", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text("Simpan semua task ke file CSV di Downloads", fontSize = 13.sp, color = Color.Gray)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Button(
+                            onClick = { exportTasksToCSV(context, taskList) },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                            enabled = taskList.isNotEmpty()
+                        ) {
+                            Icon(Icons.Default.Download, null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Export CSV", fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+        }
+
         item { Spacer(modifier = Modifier.height(80.dp)) }
     }
 }
@@ -561,6 +879,7 @@ fun TodoScreen(dao: TaskDao, isDarkMode: Boolean, onToggleDarkMode: () -> Unit) 
     val totalTask = taskList.size
     val doneTask = taskList.count { it.isDone }
     val progress = if (totalTask > 0) doneTask.toFloat() / totalTask.toFloat() else 0f
+    val streak = calculateStreak(taskList)
 
     val allDone = totalTask > 0 && doneTask == totalTask
     var showKonfetti by remember { mutableStateOf(false) }
@@ -750,6 +1069,16 @@ fun TodoScreen(dao: TaskDao, isDarkMode: Boolean, onToggleDarkMode: () -> Unit) 
                                             Text("Ayo selesaikan tugasmu", fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f))
                                         }
                                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            // Streak mini badge di header home
+                                            if (streak > 0) {
+                                                Box(
+                                                    modifier = Modifier.clip(RoundedCornerShape(50))
+                                                        .background(Color.White.copy(alpha = 0.2f))
+                                                        .padding(horizontal = 8.dp, vertical = 5.dp)
+                                                ) {
+                                                    Text("🔥 $streak", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
                                             Box(
                                                 modifier = Modifier.size(44.dp).clip(CircleShape)
                                                     .background(Color.White.copy(alpha = 0.2f))
@@ -926,7 +1255,14 @@ fun TodoScreen(dao: TaskDao, isDarkMode: Boolean, onToggleDarkMode: () -> Unit) 
                             items(filteredList, key = { it.id }) { task ->
                                 TaskCard(
                                     task = task,
-                                    onToggleDone = { scope.launch(Dispatchers.IO) { dao.updateTask(task.copy(isDone = !task.isDone)) } },
+                                    onToggleDone = {
+                                        scope.launch(Dispatchers.IO) {
+                                            // Set completedDate saat task di-done, hapus saat un-done
+                                            val newDone = !task.isDone
+                                            val completedDate = if (newDone) todayString() else ""
+                                            dao.updateTask(task.copy(isDone = newDone, completedDate = completedDate))
+                                        }
+                                    },
                                     onEdit = { taskToEdit = task; editText = task.title; editPriority = task.priority; editDueDate = task.dueDate; editCategory = task.category },
                                     onDelete = { scope.launch(Dispatchers.IO) { dao.deleteTask(task) } }
                                 )
