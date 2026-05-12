@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,12 +35,18 @@ class MainActivity : ComponentActivity() {
         val dao = db.taskDao()
 
         setContent {
-            StudyTaskTheme {
+            var isDarkMode by remember { mutableStateOf(false) }
+
+            StudyTaskTheme(darkTheme = isDarkMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    TodoScreen(dao = dao)
+                    TodoScreen(
+                        dao = dao,
+                        isDarkMode = isDarkMode,
+                        onToggleDarkMode = { isDarkMode = !isDarkMode }
+                    )
                 }
             }
         }
@@ -46,7 +54,11 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun TodoScreen(dao: TaskDao) {
+fun TodoScreen(
+    dao: TaskDao,
+    isDarkMode: Boolean,
+    onToggleDarkMode: () -> Unit
+) {
     var taskText by remember { mutableStateOf("") }
     val taskList by dao.getAllTasks().collectAsStateWithLifecycle(initialValue = emptyList())
     val scope = rememberCoroutineScope()
@@ -60,8 +72,22 @@ fun TodoScreen(dao: TaskDao) {
         ) {
             Spacer(modifier = Modifier.height(16.dp))
 
-            Text("StudyTask", fontSize = 32.sp, fontWeight = FontWeight.Bold)
-            Text("Manage your productivity", color = Color.Gray)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("StudyTask", fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                    Text("Manage your productivity", color = Color.Gray)
+                }
+                IconButton(onClick = onToggleDarkMode) {
+                    Icon(
+                        imageVector = if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
+                        contentDescription = "Toggle Dark Mode",
+                        tint = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -153,6 +179,8 @@ fun TodoScreen(dao: TaskDao) {
                     }
                 }
             }
+
+
         }
     }
 }
