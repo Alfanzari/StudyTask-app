@@ -15,5 +15,7 @@ data class Task(
     @ColumnInfo(name = "priority")
     val priority: String = "Medium",
     @ColumnInfo(name = "due_date")
-    val dueDate: String = ""
+    val dueDate: String = "",
+    @ColumnInfo(name = "category")
+    val category: String = "Umum"
 )
