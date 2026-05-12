@@ -11,5 +11,9 @@ data class Task(
     @ColumnInfo(name = "title")
     val title: String,
     @ColumnInfo(name = "is_done")
-    val isDone: Boolean = false
+    val isDone: Boolean = false,
+    @ColumnInfo(name = "priority")
+    val priority: String = "Medium",
+    @ColumnInfo(name = "due_date")
+    val dueDate: String = ""
 )

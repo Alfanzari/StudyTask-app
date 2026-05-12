@@ -125,6 +125,11 @@ dependencies {
         "androidx.room:room-compiler:2.6.1"
     )
 
+    // DATASTORE
+    implementation(
+        "androidx.datastore:datastore-preferences:1.1.1"
+    )
+
     // TEST
     testImplementation(
         "junit:junit:4.13.2"
